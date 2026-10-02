@@ -1,0 +1,7 @@
+// LocalPDF-authored. Swift sees only qpdf's C API: the C++ headers next to it in
+// include/qpdf are for the library's own sources and for CQPDFBridge.
+module CQPDF {
+    header "qpdf/qpdf-c.h"
+    header "qpdf-c-localpdf.h"
+    export *
+}

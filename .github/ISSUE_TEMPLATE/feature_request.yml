@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest a tool or an improvement.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        LocalPDF only does things that work fully offline. Ideas that need a server or a
+        cloud service are out of scope by design.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The task or problem, rather than a specific solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: How you imagine it working. Mention the iLovePDF (or other) tool it matches, if any.
+  - type: checkboxes
+    id: existing
+    attributes:
+      label: Existing tools
+      options:
+        - label: I checked the tool list in the README

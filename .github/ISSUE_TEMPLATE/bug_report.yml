@@ -1,0 +1,48 @@
+name: Bug report
+description: Something doesn't work the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Please don't attach confidential PDFs.** If the bug needs a
+        file, make a harmless one that reproduces it. Security problems go through
+        [private reporting](https://github.com/gielfull/LocalPDF/security/advisories/new) instead.
+  - type: input
+    id: tool
+    attributes:
+      label: Tool
+      description: Which tool were you using?
+      placeholder: e.g. Compress PDF
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+      placeholder: |
+        1. Added a 40-page PDF to Split
+        2. Typed "1-3, 4-"
+        3. Expected two files, got one
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: e.g. macOS 27.0 (26A428)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: LocalPDF version or commit
+      description: The commit you built from (`git rev-parse --short HEAD`), or the app version.
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots (with harmless files), crash logs from Console, or a sample PDF.

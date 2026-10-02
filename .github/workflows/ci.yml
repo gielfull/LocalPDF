@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test
+    # GitHub's Xcode 27 image (arm64, macOS 27). The app targets macOS 27, so the tests
+    # need a macOS 27 host; the test step checks the OS and skips with a notice if the
+    # image ever falls back to an older macOS.
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 27
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            echo "::error::No Xcode 27 found on this runner"; ls -d /Applications/Xcode*; exit 1
+          fi
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          sw_vers
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Build engine and tests
+        working-directory: Packages/PDFEngine
+        run: swift build --build-tests
+
+      - name: Build app
+        run: |
+          xcodebuild -project LocalPDF.xcodeproj -scheme LocalPDF -configuration Release \
+            -destination 'platform=macOS' -derivedDataPath build \
+            CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= build
+
+      - name: Check the app has no network entitlement
+        run: |
+          ENTITLEMENTS=$(codesign -d --entitlements - --xml build/Build/Products/Release/LocalPDF.app 2>/dev/null)
+          echo "$ENTITLEMENTS" | plutil -p -
+          if echo "$ENTITLEMENTS" | grep -q "com.apple.security.network"; then
+            echo "::error::The app must not have a network entitlement"; exit 1
+          fi
+
+      - name: Run tests (macOS 27+ runners only)
+        run: |
+          if [ "$(sw_vers -productVersion | cut -d. -f1)" -ge 27 ]; then
+            xcodebuild -project LocalPDF.xcodeproj -scheme LocalPDF -destination 'platform=macOS' \
+              -derivedDataPath build CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= test
+          else
+            echo "::notice::Runner is macOS $(sw_vers -productVersion); tests need macOS 27, skipping. Run them locally."
+          fi

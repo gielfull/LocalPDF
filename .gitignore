@@ -1,0 +1,13 @@
+.DS_Store
+# XcodeGen: the project is generated from project.yml, never committed.
+*.xcodeproj
+build/
+DerivedData/
+# SwiftPM (Packages/PDFEngine)
+.build/
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+
+# Per-agent SwiftPM scratch paths (swift build --scratch-path .build-<name>)
+.build-*/

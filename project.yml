@@ -1,0 +1,197 @@
+name: LocalPDF
+options:
+  bundleIdPrefix: com.gielfull
+  deploymentTarget:
+    macOS: "27.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    # Swift 6 language mode with complete checking. The engine runs PDF jobs off
+    # the main actor and reports progress back to UI; data races there are exactly
+    # the class of bug the compiler should catch rather than a user's corrupted file.
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    # macOS 27 only: reorderable(), the SwiftUI Document protocol,
+    # TabsPickerStyle and Foundation Models contextSize without availability branches.
+    MACOSX_DEPLOYMENT_TARGET: "27.0"
+    CODE_SIGN_STYLE: Automatic
+    # A real signing identity in every configuration: sandbox containers and TCC
+    # grants are keyed to the code signature, and an ad-hoc signature that changes
+    # on every rebuild makes both look brand new each time.
+    DEVELOPMENT_TEAM: 3KTKRZUTXA
+    # On for every configuration, not just Release, so anything the hardened
+    # runtime forbids (JIT, unsigned dylibs from a vendored C library such as
+    # qpdf) shows up during development rather than on release afternoon.
+    ENABLE_HARDENED_RUNTIME: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+packages:
+  # Local package: the whole PDF engine. Pure Swift, no UI imports, nonisolated
+  # and Sendable, so it can later run unchanged inside the XPC worker and the CLI.
+  PDFEngine:
+    path: Packages/PDFEngine
+
+targets:
+  LocalPDF:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/LocalPDF
+        excludes:
+          - "**/.gitkeep"
+    dependencies:
+      - package: PDFEngine
+    entitlements:
+      path: Sources/LocalPDF/Resources/LocalPDF.entitlements
+      properties:
+        # Sandboxed, and deliberately WITHOUT com.apple.security.network.client or
+        # .server. "Your files never leave your Mac" is the product promise, and the
+        # absence of the network entitlement is what makes the kernel enforce it
+        # instead of marketing asserting it. Never add a network entitlement.
+        com.apple.security.app-sandbox: true
+        # Files the user picks in an open/save panel or drags onto the window.
+        com.apple.security.files.user-selected.read-write: true
+        # Default output location for results ("Save to Downloads").
+        com.apple.security.files.downloads.read-write: true
+    info:
+      path: Sources/LocalPDF/Resources/Info.plist
+      properties:
+        # Track a build setting rather than a literal, so a debug build calls
+        # itself "LocalPDF Dev" everywhere a name is shown. The *bundle* stays
+        # LocalPDF.app in both configurations so run commands never change.
+        CFBundleDisplayName: "$(LOCALPDF_APP_NAME)"
+        CFBundleName: "$(LOCALPDF_APP_NAME)"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSMinimumSystemVersion: "27.0"
+        LSApplicationCategoryType: public.app-category.productivity
+        NSHumanReadableCopyright: ""
+        # "Open With" for PDFs and images. Viewer + Alternate: we can open these,
+        # but we never ask to become the default PDF app (Preview stays the owner).
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: PDF Document
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.adobe.pdf
+          - CFBundleTypeName: Image
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.image
+        # Finder Quick Actions: Services the app itself provides, listed
+        # in Finder's right-click menu for matching files. Services rather than an Action
+        # extension because each one opens the app with the files loaded into a tool,
+        # which a Service does directly; no extra target, and the sandbox grants access
+        # to the files on the pasteboard. NSMessage must equal a FinderAction raw value
+        # (AppDelegate+Services has the method; a test checks both). The empty
+        # NSRequiredContext turns each one on by default. Only list tools that are
+        # available; one that isn't falls back to the home screen at runtime.
+        # NSPortName follows the executable, which Debug renames to LocalPDF_dev.
+        NSServices:
+          - NSMenuItem:
+              default: "Open in $(LOCALPDF_APP_NAME)"
+            NSMessage: openInLocalPDF
+            NSPortName: "$(EXECUTABLE_NAME)"
+            NSRequiredContext: {}
+            NSSendFileTypes:
+              - com.adobe.pdf
+              - public.image
+          - NSMenuItem:
+              default: "Compress with $(LOCALPDF_APP_NAME)"
+            NSMessage: compressWithLocalPDF
+            NSPortName: "$(EXECUTABLE_NAME)"
+            NSRequiredContext: {}
+            NSSendFileTypes:
+              - com.adobe.pdf
+          - NSMenuItem:
+              default: "Merge with $(LOCALPDF_APP_NAME)"
+            NSMessage: mergeWithLocalPDF
+            NSPortName: "$(EXECUTABLE_NAME)"
+            NSRequiredContext: {}
+            NSSendFileTypes:
+              - com.adobe.pdf
+          - NSMenuItem:
+              default: "Convert Images to PDF with $(LOCALPDF_APP_NAME)"
+            NSMessage: convertImagesToPDFWithLocalPDF
+            NSPortName: "$(EXECUTABLE_NAME)"
+            NSRequiredContext: {}
+            NSSendFileTypes:
+              - public.image
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gielfull.LocalPDF
+        LOCALPDF_APP_NAME: LocalPDF
+        GENERATE_INFOPLIST_FILE: NO
+        # The app target is almost entirely UI, so isolate it to the main actor by
+        # default. PDFEngine does NOT get this: it is a nonisolated, Sendable engine
+        # whose work must stay off the main thread.
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # Xcode merges these build settings into the signed entitlements. Pin them to
+        # match LocalPDF.entitlements so a default (e.g. user-selected read-only)
+        # can't silently override the file, and so network stays off from both sides.
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_USER_SELECTED_FILES: readwrite
+        ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER: readwrite
+        ENABLE_OUTGOING_NETWORK_CONNECTIONS: NO
+        ENABLE_INCOMING_NETWORK_CONNECTIONS: NO
+      configs:
+        # A debug build is a *different app*, not the same app in another mood.
+        # Distinct identifier -> the installed copy and the build you're hacking on
+        # coexist, and each gets its own sandbox container.
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.gielfull.LocalPDF.dev
+          LOCALPDF_APP_NAME: LocalPDF Dev
+          # The binary is renamed too, so `pkill -x LocalPDF_dev` can never take down
+          # an installed release. Info.plist reads CFBundleExecutable from
+          # $(EXECUTABLE_NAME), so the two cannot drift. Underscored because this
+          # name's job is to be typed at a shell without quoting.
+          EXECUTABLE_NAME: LocalPDF_dev
+
+  LocalPDFTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/LocalPDFTests
+    dependencies:
+      - target: LocalPDF
+      - package: PDFEngine
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gielfull.LocalPDFTests
+        GENERATE_INFOPLIST_FILE: YES
+        # Same default isolation as the app, so tests touch app types without hops.
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        BUNDLE_LOADER: "$(TEST_HOST)"
+      configs:
+        # The host executable is renamed in Debug (see EXECUTABLE_NAME above), so the
+        # test host path has to follow it per configuration.
+        Debug:
+          TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LocalPDF.app/Contents/MacOS/LocalPDF_dev"
+        Release:
+          TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LocalPDF.app/Contents/MacOS/LocalPDF"
+
+schemes:
+  LocalPDF:
+    build:
+      targets:
+        LocalPDF: all
+        LocalPDFTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - LocalPDFTests
+        - package: PDFEngine/PDFEngineTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
