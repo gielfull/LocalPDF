@@ -53,12 +53,6 @@ Tests/LocalPDFTests/            app tests
 - The app target is `MainActor` by default; `PDFEngine` is deliberately nonisolated and
   `Sendable` so jobs run off the main actor.
 
-## Branches
-
-- **`staging`** is where development happens. **Open pull requests against `staging`.**
-- **`main`** is the release branch. It's updated from `staging` by the maintainer; don't
-  commit to it directly.
-
 ## Rules that can't bend
 
 1. **No network access, ever.** Never add `com.apple.security.network.client`/`.server` or
@@ -75,8 +69,8 @@ Tests/LocalPDFTests/            app tests
 
 ## Making a change
 
-- **Open an issue first** for anything bigger than a small fix, so we can agree on the
-  approach before you spend time on it.
+- **Open pull requests against `main`.** For anything bigger than a small fix, open an
+  issue first so we can agree on the approach before you spend time on it.
 - **Adding a tool:** implement a `PDFOperation` in `Packages/PDFEngine/Sources/PDFEngine/<Area>/`,
   its options UI in `Sources/LocalPDF/Features/<Tool>/`, wire it into `ToolInspector` and
   `ToolSession+Request`, then add its `ToolID` to `implemented` in `ToolCatalog`.
